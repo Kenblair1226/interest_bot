@@ -1,0 +1,31 @@
+# Ignore .env file
+.env
+
+# Ignore compiled binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Ignore Go binary
+interest_bot
+
+# Ignore test binary, built with `go test -c`
+*.test
+
+# Ignore output of the go coverage tool
+*.out
+
+# Ignore Go workspace file
+go.work
+
+# Ignore IDE-specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
