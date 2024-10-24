@@ -1,50 +1,46 @@
-# OKX Interest Rate Bot
+# Interest Rate Bot
 
-This Telegram bot monitors the interest rate for TIA (Celestia) on OKX and sends notifications when the rate changes.
+This Telegram bot monitors interest rates from OKX and Neptune platforms and sends notifications when rates change.
 
 ## Prerequisites
 
-- Go 1.20 or later
-- A Telegram Bot Token
-- Your Telegram Chat ID
+- Docker and Docker Compose
 
 ## Setup
 
-1. Clone the repository:   ```
+1. Clone the repository:
+   ```
    git clone <your-repository-url>
-   cd <repository-directory>   ```
+   cd <repository-directory>
+   ```
 
-2. Install dependencies:   ```
-   go mod tidy   ```
-
-3. Create a `.env` file in the root directory with the following content:   ```
+2. Create a `.env` file in the root directory with the following content:
+   ```
    TELEGRAM_TOKEN=your_telegram_bot_token
-   CHAT_ID=your_telegram_chat_id   ```
+   CHAT_ID=your_telegram_chat_id
+   ```
    Replace `your_telegram_bot_token` and `your_telegram_chat_id` with your actual Telegram bot token and chat ID.
 
-## Running the Application
+## Running the Application with Docker
 
-To run the application, use the following command from the root directory of the project:
+To run the application using Docker, use the following command:
+
 ```
-go run src/okx_interest_bot.go
-```
-
-The bot will start running and will check for interest rate updates every 15 minutes. It will send a message to your specified Telegram chat when the estimated rate for the next hour changes.
-
-## Building the Application
-
-If you want to build the application into an executable, use:
-```
-go build -o interest_bot src/okx_interest_bot.go
+docker-compose up --build
 ```
 
-This will create an executable named `interest_bot` in your current directory. You can then run it with:
+This command will build the Docker image and start the container. The bot will start running and will check for interest rate updates every 15 minutes.
+
+## Stopping the Application
+
+To stop the application, use:
+
 ```
-./interest_bot
+docker-compose down
 ```
 
 ## Notes
 
 - The bot checks for rate updates every 15 minutes.
-- Make sure your `.env` file is properly configured and in the same directory as the executable when running the built version.
-- The `.env` file is ignored by git for security reasons. Never commit your actual token or chat ID to version control.
+- Make sure your `.env` file is properly configured before running the Docker container.
+- The `.env` file is used by Docker Compose to set environment variables in the container. It should never be committed to version control.
