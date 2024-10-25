@@ -3,7 +3,7 @@ stages:
   - test
 
 variables:
-  DOCKER_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  DOCKER_IMAGE: $CI_REGISTRY/$CI_REGISTRY_USER/$CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG
   CGO_ENABLED: "1"  # Enable CGo for all stages
 
 build:
