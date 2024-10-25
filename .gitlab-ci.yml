@@ -1,0 +1,43 @@
+stages:
+  - build
+  - test
+
+variables:
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  CGO_ENABLED: "1"  # Enable CGo for all stages
+
+build:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  variables:
+    DOCKER_BUILDKIT: "1"  # Enable BuildKit for faster builds
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build --build-arg CGO_ENABLED=1 -t $DOCKER_IMAGE .
+    - docker push $DOCKER_IMAGE
+  only:
+    - main
+    - tags
+
+test:
+  stage: test
+  image: golang:1.20
+  variables:
+    CGO_ENABLED: "1"  # Explicitly set for the test stage
+  script:
+    - go test ./src/...
+  only:
+    - main
+    - merge_requests
+
+lint:
+  stage: test
+  image: golangci/golangci-lint:v1.50.1
+  script:
+    - golangci-lint run ./src/...
+  only:
+    - main
+    - merge_requests
