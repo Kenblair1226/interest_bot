@@ -35,7 +35,7 @@ test:
 
 lint:
   stage: test
-  image: golangci/golangci-lint:v1.50.1
+  image: golangci/golangci-lint:v1.56.2
   script:
     - golangci-lint run ./src/...
   only:
