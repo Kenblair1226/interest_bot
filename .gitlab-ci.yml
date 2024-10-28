@@ -24,7 +24,7 @@ build:
 
 test:
   stage: test
-  image: golang:1.20
+  image: golang:1.22-alpine
   variables:
     CGO_ENABLED: "1"  # Explicitly set for the test stage
   script:
@@ -36,8 +36,10 @@ test:
 lint:
   stage: test
   image: golangci/golangci-lint:v1.56.2
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
   script:
-    - golangci-lint run ./src/...
+    - golangci-lint run --timeout=5m --modules-download-mode=readonly ./src/...
   only:
     - main
     - merge_requests
