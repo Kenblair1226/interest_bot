@@ -55,7 +55,10 @@ func TestNeptuneSource_FetchRates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(tt.responseBody))
+				_, err := w.Write([]byte(tt.responseBody)) // Check the error
+				if err != nil {
+					t.Errorf("Failed to write test response: %v", err)
+				}
 			}))
 			defer server.Close()
 
