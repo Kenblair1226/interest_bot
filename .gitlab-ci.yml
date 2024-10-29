@@ -1,6 +1,6 @@
 stages:
-  - build
   - test
+  - build
 
 variables:
   DOCKER_IMAGE: $CI_REGISTRY/$CI_REGISTRY_USER/$CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG
@@ -24,7 +24,7 @@ build:
 
 test:
   stage: test
-  image: golang:1.22-alpine
+  image: golang:1.22
   script:
     - go test ./src/...
   only:
