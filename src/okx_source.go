@@ -26,7 +26,7 @@ type OKXResponse struct {
 func NewOKXSource() *OKXSource {
 	return &OKXSource{
 		APIURLTemplate: "https://www.okx.com/priapi/v2/financial/market-lending-info?currencyId=%d",
-		CurrencyIDs:    []int{2854, 7, 283}, // TIA, BTC, ETH
+		CurrencyIDs:    []int{2854, 7, 283}, // TIA, USDT, USDC
 	}
 }
 

@@ -1,16 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
 )
 
-const checkInterval = 15 * time.Minute
+const checkInterval = 30 * time.Minute
 
 func main() {
 	// Try to load .env file
@@ -46,6 +48,26 @@ func main() {
 	okxSource := NewOKXSource()
 	neptuneSource := NewNeptuneSource()
 
+	// Load lending rate thresholds from environment variables
+	lendingThresholdUSDCStr := getEnv("LENDING_THRESHOLD_USDC", "30") // Default threshold for USDC is 10%
+	lendingThresholdTIAStr := getEnv("LENDING_THRESHOLD_TIA", "30")   // Default threshold for TIA is 30%
+	lendingThresholdUSDTStr := getEnv("LENDING_THRESHOLD_USDT", "30") // Default threshold for USDT is 15%
+
+	lendingThresholdUSDC, err := strconv.ParseFloat(lendingThresholdUSDCStr, 64)
+	if err != nil {
+		log.Fatal("Invalid LENDING_THRESHOLD_USDC:", err)
+	}
+
+	lendingThresholdTIA, err := strconv.ParseFloat(lendingThresholdTIAStr, 64)
+	if err != nil {
+		log.Fatal("Invalid LENDING_THRESHOLD_TIA:", err)
+	}
+
+	lendingThresholdUSDT, err := strconv.ParseFloat(lendingThresholdUSDTStr, 64)
+	if err != nil {
+		log.Fatal("Invalid LENDING_THRESHOLD_USDT:", err)
+	}
+
 	for {
 		okxUpdates, err := okxSource.FetchRates()
 		if err != nil {
@@ -59,8 +81,56 @@ func main() {
 
 		allUpdates := append(okxUpdates, neptuneUpdates...)
 
-		if len(allUpdates) > 0 {
-			message := "Interest rate updates:\n" + joinStrings(allUpdates, "\n")
+		// Filter updates based on lending rate thresholds
+		filteredUpdates := []string{}
+		for _, update := range allUpdates {
+			if strings.Contains(update, "USDC") {
+				// Extract the lending rate from the update string
+				lendingRateStr := extractLendingRate(update, "USDC")
+				if lendingRateStr == "" {
+					continue
+				}
+				lendingRate, err := strconv.ParseFloat(lendingRateStr, 64)
+				if err != nil {
+					log.Printf("Error parsing lending rate for USDC: %v", err)
+					continue
+				}
+				if lendingRate >= lendingThresholdUSDC {
+					filteredUpdates = append(filteredUpdates, update)
+				}
+			} else if strings.Contains(update, "TIA") {
+				// Extract the lending rate from the update string
+				lendingRateStr := extractLendingRate(update, "TIA")
+				if lendingRateStr == "" {
+					continue
+				}
+				lendingRate, err := strconv.ParseFloat(lendingRateStr, 64)
+				if err != nil {
+					log.Printf("Error parsing lending rate for TIA: %v", err)
+					continue
+				}
+				if lendingRate >= lendingThresholdTIA {
+					filteredUpdates = append(filteredUpdates, update)
+				}
+			} else if strings.Contains(update, "USDT") {
+				// Extract the lending rate from the update string
+				lendingRateStr := extractLendingRate(update, "USDT")
+				if lendingRateStr == "" {
+					continue
+				}
+				lendingRate, err := strconv.ParseFloat(lendingRateStr, 64)
+				if err != nil {
+					log.Printf("Error parsing lending rate for USDT: %v", err)
+					continue
+				}
+				if lendingRate >= lendingThresholdUSDT {
+					filteredUpdates = append(filteredUpdates, update)
+				}
+			}
+		}
+
+		if len(filteredUpdates) > 0 {
+			message := "High lending rate updates:\n" + joinStrings(filteredUpdates, "\n")
 			sendTelegramMessage(bot, chatID, message)
 		}
 
@@ -96,4 +166,20 @@ func getEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// extractLendingRate extracts the lending rate from the update string for the given token
+func extractLendingRate(update, token string) string {
+	// Example update format: "Neptune USDC: Lend: 12.34%, Borrow: 5.67%"
+	prefix := fmt.Sprintf("%s: Lend: ", token)
+	start := strings.Index(update, prefix)
+	if start == -1 {
+		return ""
+	}
+	start += len(prefix)
+	end := strings.Index(update[start:], "%")
+	if end == -1 {
+		return ""
+	}
+	return update[start : start+end]
 }
