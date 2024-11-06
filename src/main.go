@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,14 @@ import (
 )
 
 const checkInterval = 30 * time.Minute
+
+// // Define a unified Rate struct
+// type Rate struct {
+// 	Source      string  `json:"source"`
+// 	Token       string  `json:"token"`
+// 	BorrowRate  float64 `json:"borrow_rate"`
+// 	LendingRate float64 `json:"lending_rate"`
+// }
 
 func main() {
 	// Try to load .env file
@@ -48,98 +57,105 @@ func main() {
 	okxSource := NewOKXSource()
 	neptuneSource := NewNeptuneSource()
 
-	// Load lending rate thresholds from environment variables
-	lendingThresholdUSDCStr := getEnv("LENDING_THRESHOLD_USDC", "30") // Default threshold for USDC is 10%
-	lendingThresholdTIAStr := getEnv("LENDING_THRESHOLD_TIA", "30")   // Default threshold for TIA is 30%
-	lendingThresholdUSDTStr := getEnv("LENDING_THRESHOLD_USDT", "30") // Default threshold for USDT is 15%
-
-	lendingThresholdUSDC, err := strconv.ParseFloat(lendingThresholdUSDCStr, 64)
-	if err != nil {
-		log.Fatal("Invalid LENDING_THRESHOLD_USDC:", err)
+	// Load lending rate thresholds into a map for scalability
+	lendingThresholds := map[string]float64{
+		"USDC": 30.0,
+		"TIA":  30.0,
+		"USDT": 30.0,
 	}
 
-	lendingThresholdTIA, err := strconv.ParseFloat(lendingThresholdTIAStr, 64)
-	if err != nil {
-		log.Fatal("Invalid LENDING_THRESHOLD_TIA:", err)
+	// Optionally, load thresholds from environment variables
+	for token, defaultThreshold := range lendingThresholds {
+		thresholdStr := getEnv(fmt.Sprintf("LENDING_THRESHOLD_%s", token), fmt.Sprintf("%.0f", defaultThreshold))
+		threshold, err := strconv.ParseFloat(thresholdStr, 64)
+		if err != nil {
+			log.Fatalf("Invalid LENDING_THRESHOLD_%s: %v", token, err)
+		}
+		lendingThresholds[token] = threshold
 	}
 
-	lendingThresholdUSDT, err := strconv.ParseFloat(lendingThresholdUSDTStr, 64)
-	if err != nil {
-		log.Fatal("Invalid LENDING_THRESHOLD_USDT:", err)
-	}
+	injeraSource := NewInjeraSource() // Initialize Injera source
 
 	for {
-		okxUpdates, err := okxSource.FetchRates()
+		okxRates, err := okxSource.FetchRates()
 		if err != nil {
 			log.Printf("Error fetching OKX rates: %v", err)
 		}
 
-		neptuneUpdates, err := neptuneSource.FetchRates()
+		neptuneRates, err := neptuneSource.FetchRates()
 		if err != nil {
 			log.Printf("Error fetching Neptune rates: %v", err)
 		}
 
-		allUpdates := append(okxUpdates, neptuneUpdates...)
+		injeraRates, err := injeraSource.FetchRates()
+		if err != nil {
+			log.Printf("Error fetching Injera rates: %v", err)
+		}
 
-		// Filter updates based on lending rate thresholds
-		filteredUpdates := []string{}
-		for _, update := range allUpdates {
-			if strings.Contains(update, "USDC") {
-				// Extract the lending rate from the update string
-				lendingRateStr := extractLendingRate(update, "USDC")
-				if lendingRateStr == "" {
-					continue
-				}
-				lendingRate, err := strconv.ParseFloat(lendingRateStr, 64)
-				if err != nil {
-					log.Printf("Error parsing lending rate for USDC: %v", err)
-					continue
-				}
-				if lendingRate >= lendingThresholdUSDC {
-					filteredUpdates = append(filteredUpdates, update)
-				}
-			} else if strings.Contains(update, "TIA") {
-				// Extract the lending rate from the update string
-				lendingRateStr := extractLendingRate(update, "TIA")
-				if lendingRateStr == "" {
-					continue
-				}
-				lendingRate, err := strconv.ParseFloat(lendingRateStr, 64)
-				if err != nil {
-					log.Printf("Error parsing lending rate for TIA: %v", err)
-					continue
-				}
-				if lendingRate >= lendingThresholdTIA {
-					filteredUpdates = append(filteredUpdates, update)
-				}
-			} else if strings.Contains(update, "USDT") {
-				// Extract the lending rate from the update string
-				lendingRateStr := extractLendingRate(update, "USDT")
-				if lendingRateStr == "" {
-					continue
-				}
-				lendingRate, err := strconv.ParseFloat(lendingRateStr, 64)
-				if err != nil {
-					log.Printf("Error parsing lending rate for USDT: %v", err)
-					continue
-				}
-				if lendingRate >= lendingThresholdUSDT {
-					filteredUpdates = append(filteredUpdates, update)
-				}
+		allRates := append(okxRates, neptuneRates...)
+		allRates = append(allRates, injeraRates...)
+
+		log.Printf("Fetched rates: %+v", allRates)
+
+		// Filter rates based on lending rate thresholds
+		filteredRates := []Rate{}
+		for _, rate := range allRates {
+			threshold, exists := lendingThresholds[rate.Token]
+			if !exists {
+				continue
+			}
+			if rate.LendingRate >= threshold {
+				filteredRates = append(filteredRates, rate)
 			}
 		}
 
-		if len(filteredUpdates) > 0 {
-			message := "High lending rate updates:\n" + joinStrings(filteredUpdates, "\n")
-			sendTelegramMessage(bot, chatID, message)
+		if len(filteredRates) > 0 {
+			// Group rates by token
+			ratesByToken := make(map[string][]Rate)
+			tokensWithHighRates := make(map[string]bool)
+
+			// First, identify tokens with high rates
+			for _, rate := range filteredRates {
+				tokensWithHighRates[rate.Token] = true
+			}
+
+			// Then, collect all rates for those tokens
+			for _, rate := range allRates {
+				if tokensWithHighRates[rate.Token] {
+					ratesByToken[rate.Token] = append(ratesByToken[rate.Token], rate)
+				}
+			}
+
+			var message strings.Builder
+			message.WriteString("*High Lending Rate Updates*\n\n")
+
+			for token := range tokensWithHighRates {
+				rates := ratesByToken[token]
+				message.WriteString(fmt.Sprintf("🪙 *%s*\n", token))
+
+				// Sort rates by source for consistent ordering
+				sort.Slice(rates, func(i, j int) bool {
+					return rates[i].Source < rates[j].Source
+				})
+
+				for _, rate := range rates {
+					message.WriteString(fmt.Sprintf("  • %s:\n", rate.Source))
+					message.WriteString(fmt.Sprintf("    └ Lend: `%.2f%%`\n", rate.LendingRate))
+					message.WriteString(fmt.Sprintf("    └ Borrow: `%.2f%%`\n", rate.BorrowRate))
+				}
+				message.WriteString("\n")
+			}
+
+			msg := tgbotapi.NewMessage(chatID, message.String())
+			msg.ParseMode = "markdown"
+			sendTelegramMessage(bot, chatID, msg)
 		}
 
 		time.Sleep(checkInterval)
 	}
 }
 
-func sendTelegramMessage(bot *tgbotapi.BotAPI, chatID int64, message string) {
-	msg := tgbotapi.NewMessage(chatID, message)
+func sendTelegramMessage(bot *tgbotapi.BotAPI, chatID int64, msg tgbotapi.MessageConfig) {
 	_, err := bot.Send(msg)
 	if err != nil {
 		log.Printf("Error sending Telegram message: %v", err)

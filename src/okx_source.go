@@ -30,19 +30,22 @@ func NewOKXSource() *OKXSource {
 	}
 }
 
-func (s *OKXSource) FetchRates() ([]string, error) {
-	var updates []string
+func (s *OKXSource) FetchRates() ([]Rate, error) {
+	var rates []Rate
 	for _, currencyID := range s.CurrencyIDs {
-		estimatedRate, preRate, avgRate, currencyName, err := s.fetchInterestRates(currencyID)
+		estimatedRate, preRate, _, currencyName, err := s.fetchInterestRates(currencyID)
 		if err != nil {
 			return nil, fmt.Errorf("error fetching interest rates for currency ID %d: %v", currencyID, err)
 		}
 
-		update := fmt.Sprintf("OKX %s: %.2f%% (prev: %.2f%%, avg: %.2f%%)",
-			currencyName, estimatedRate*100, preRate*100, avgRate*100)
-		updates = append(updates, update)
+		rates = append(rates, Rate{
+			Source:      "OKX",
+			Token:       currencyName,
+			BorrowRate:  preRate * 100,       // Assuming preRate is the borrow rate
+			LendingRate: estimatedRate * 100, // Assuming estimatedRate is the lending rate
+		})
 	}
-	return updates, nil
+	return rates, nil
 }
 
 func (s *OKXSource) fetchInterestRates(currencyID int) (float64, float64, float64, string, error) {

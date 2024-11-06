@@ -29,28 +29,29 @@ func NewNeptuneSource() *NeptuneSource {
 	}
 }
 
-func (s *NeptuneSource) FetchRates() ([]string, error) {
+func (s *NeptuneSource) FetchRates() ([]Rate, error) {
 	resp, err := http.Get(s.APIURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error fetching Neptune data: %v", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error reading Neptune response body: %v", err)
 	}
 
 	var neptuneResp NeptuneResponse
 	err = json.Unmarshal(body, &neptuneResp)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error unmarshaling Neptune response: %v", err)
 	}
 
-	updates := make(map[string]string)
+	// Create a map to store rates by token
+	ratesByToken := make(map[string]*Rate)
 
-	processRates := func(rates [][]interface{}, rateType string) {
-		for _, rate := range rates {
+	processRates := func(ratesData [][]interface{}, rateType string) {
+		for _, rate := range ratesData {
 			if len(rate) != 2 {
 				continue
 			}
@@ -80,21 +81,34 @@ func (s *NeptuneSource) FetchRates() ([]string, error) {
 			}
 			ratePercent := rateFloat * 100
 
-			if existingUpdate, ok := updates[tokenName]; ok {
-				updates[tokenName] = fmt.Sprintf("%s, %s: %.2f%%", existingUpdate, rateType, ratePercent)
-			} else {
-				updates[tokenName] = fmt.Sprintf("%s: %.2f%%", rateType, ratePercent)
+			// Get or create rate struct for this token
+			rateStruct, exists := ratesByToken[tokenName]
+			if !exists {
+				rateStruct = &Rate{
+					Source: "Neptune",
+					Token:  tokenName,
+				}
+				ratesByToken[tokenName] = rateStruct
+			}
+
+			// Update the appropriate rate
+			if rateType == "Borrow" {
+				rateStruct.BorrowRate = ratePercent
+			} else if rateType == "Lend" {
+				rateStruct.LendingRate = ratePercent
 			}
 		}
 	}
 
+	// Process both types of rates
 	processRates(neptuneResp.LendAPRs, "Lend")
 	processRates(neptuneResp.BorrowAPRs, "Borrow")
 
-	var result []string
-	for token, rates := range updates {
-		result = append(result, fmt.Sprintf("Neptune %s: %s", token, rates))
+	// Convert map to slice
+	var rates []Rate
+	for _, rate := range ratesByToken {
+		rates = append(rates, *rate)
 	}
 
-	return result, nil
+	return rates, nil
 }

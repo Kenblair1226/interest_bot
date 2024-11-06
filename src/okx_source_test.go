@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -83,11 +81,12 @@ func TestOKXSource_FetchRates(t *testing.T) {
 				for currency, expectedRate := range tt.expectedValues {
 					found := false
 					for _, update := range updates {
-						if strings.Contains(update, currency) {
-							t.Logf("Update string: %s", update)
+						if update.Token == currency {
+							t.Logf("Update rate: %v", update)
 
-							var actualRate float64
-							n, err := fmt.Sscanf(update, fmt.Sprintf("OKX %s: %%f", currency), &actualRate)
+							actualRate := update.LendingRate
+							n := 1
+							err := error(nil)
 							if err != nil {
 								t.Errorf("Failed to parse rate: %v, matched %d items", err, n)
 								continue

@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -80,13 +78,11 @@ func TestNeptuneSource_FetchRates(t *testing.T) {
 				for currency, expectedRates := range tt.expectedValues {
 					found := false
 					for _, update := range updates {
-						if strings.Contains(update, currency) {
-							var lendRate, borrowRate float64
-							fmt.Sscanf(update, fmt.Sprintf("Neptune %s: Lend: %s, Borrow: %s", currency, "%f%%", "%f%%"), &lendRate, &borrowRate)
+						if update.Token == currency {
 							found = true
-							if lendRate != expectedRates[0] || borrowRate != expectedRates[1] {
+							if update.LendingRate != expectedRates[0] || update.BorrowRate != expectedRates[1] {
 								t.Errorf("FetchRates() got rates %.2f/%.2f for %s, want %.2f/%.2f",
-									lendRate, borrowRate, currency, expectedRates[0], expectedRates[1])
+									update.LendingRate, update.BorrowRate, currency, expectedRates[0], expectedRates[1])
 							}
 							break
 						}
