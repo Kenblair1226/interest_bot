@@ -183,19 +183,3 @@ func getEnv(key, defaultValue string) string {
 	}
 	return value
 }
-
-// extractLendingRate extracts the lending rate from the update string for the given token
-func extractLendingRate(update, token string) string {
-	// Example update format: "Neptune USDC: Lend: 12.34%, Borrow: 5.67%"
-	prefix := fmt.Sprintf("%s: Lend: ", token)
-	start := strings.Index(update, prefix)
-	if start == -1 {
-		return ""
-	}
-	start += len(prefix)
-	end := strings.Index(update[start:], "%")
-	if end == -1 {
-		return ""
-	}
-	return update[start : start+end]
-}
