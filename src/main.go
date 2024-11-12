@@ -139,9 +139,8 @@ func main() {
 				})
 
 				for _, rate := range rates {
-					message.WriteString(fmt.Sprintf("  • %s:\n", rate.Source))
-					message.WriteString(fmt.Sprintf("    └ Lend: `%.2f%%`\n", rate.LendingRate))
-					message.WriteString(fmt.Sprintf("    └ Borrow: `%.2f%%`\n", rate.BorrowRate))
+					message.WriteString(fmt.Sprintf("  • %s: L: `%.2f%%` | B: `%.2f%%`\n",
+						rate.Source, rate.LendingRate, rate.BorrowRate))
 				}
 				message.WriteString("\n")
 			}
