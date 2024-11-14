@@ -85,12 +85,6 @@ func TestOKXSource_FetchRates(t *testing.T) {
 							t.Logf("Update rate: %v", update)
 
 							actualRate := update.LendingRate
-							n := 1
-							err := error(nil)
-							if err != nil {
-								t.Errorf("Failed to parse rate: %v, matched %d items", err, n)
-								continue
-							}
 							found = true
 							if actualRate != expectedRate {
 								t.Errorf("FetchRates() got rate %.2f for %s, want %.2f", actualRate, currency, expectedRate)
