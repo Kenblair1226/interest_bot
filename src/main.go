@@ -360,7 +360,7 @@ func main() {
 func sendTelegramMessage(bot *tgbotapi.BotAPI, msg tgbotapi.MessageConfig) {
 	_, err := bot.Send(msg)
 	if err != nil {
-		log.Printf("Error sending Telegram message: %v", err)
+		log.Printf("Error sending Telegram message: %v, msg: %+v", err, msg)
 	}
 }
 
@@ -393,7 +393,7 @@ func formatRate(rate Rate, threshold float64) string {
 	if rate.LendingRate >= threshold*2 {
 		lendingRateStr = fmt.Sprintf("🔥`%.2f%%`", rate.LendingRate)
 	} else if rate.LendingRate >= threshold {
-		lendingRateStr = fmt.Sprintf("`%.2f%%`*", rate.LendingRate)
+		lendingRateStr = fmt.Sprintf("*`%.2f%%`*", rate.LendingRate)
 	} else {
 		lendingRateStr = fmt.Sprintf("`%.2f%%`", rate.LendingRate)
 	}
