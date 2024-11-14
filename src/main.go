@@ -226,22 +226,6 @@ func main() {
 			continue
 		}
 
-		// Add the chat ID to active chats when a user sends "/start"
-		if update.Message.Text == "/start" {
-			activeChatIDs[update.Message.Chat.ID] = true
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID,
-				"Welcome! You will now receive notifications when lending rates exceed thresholds.")
-			sendTelegramMessage(bot, msg)
-		}
-
-		// Remove the chat ID when a user sends "/stop"
-		if update.Message.Text == "/stop" {
-			delete(activeChatIDs, update.Message.Chat.ID)
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID,
-				"You have been unsubscribed from notifications.")
-			sendTelegramMessage(bot, msg)
-		}
-
 		// Handle different commands
 		switch {
 		case update.Message.Text == "/start":
@@ -393,7 +377,7 @@ func formatRate(rate Rate, threshold float64) string {
 	if rate.LendingRate >= threshold*2 {
 		lendingRateStr = fmt.Sprintf("🔥`%.2f%%`", rate.LendingRate)
 	} else if rate.LendingRate >= threshold {
-		lendingRateStr = fmt.Sprintf("*`%.2f%%`*", rate.LendingRate)
+		lendingRateStr = fmt.Sprintf("`*%.2f%%*`", rate.LendingRate)
 	} else {
 		lendingRateStr = fmt.Sprintf("`%.2f%%`", rate.LendingRate)
 	}
