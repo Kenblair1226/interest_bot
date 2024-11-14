@@ -4,24 +4,20 @@ FROM golang:1.22-alpine
 # Set the working directory inside the container
 WORKDIR /app
 
+# Install required build dependencies
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+
+# Set CGO_ENABLED for sqlite support
+ENV CGO_ENABLED=1
+
 # Copy go mod and sum files
 COPY go.mod go.sum ./
-
-RUN apk add --no-cache gcc musl-dev
-
-ARG CGO_ENABLED=1
 
 # Download all dependencies
 RUN go mod download
 
 # Copy the source code into the container
 COPY src/ ./src/
-
-# Build the application
-# RUN go build -o /interest_bot src/*.go
-
-# Run the application
-# CMD ["/interest_bot"]
 
 EXPOSE 8080
 

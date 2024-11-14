@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ var (
 		"TIA":  30.0,
 		"USDT": 30.0,
 	}
+	db *Database
 )
 
 // updateLatestRates updates the global rates storage thread-safely
@@ -90,8 +92,25 @@ func main() {
 	// Start receiving updates
 	updates := bot.GetUpdatesChan(updateConfig)
 
-	// Channel to store active chat IDs
-	activeChatIDs := make(map[int64]bool)
+	// Initialize database
+	dbPath := filepath.Join("data", "bot.db")
+	// Ensure data directory exists
+	err = os.MkdirAll("data", 0755)
+	if err != nil {
+		log.Fatal("Failed to create data directory:", err)
+	}
+
+	db, err = NewDatabase(dbPath)
+	if err != nil {
+		log.Fatal("Failed to initialize database:", err)
+	}
+	defer db.Close()
+
+	// Load existing subscribers
+	activeChatIDs, err := db.GetAllSubscribers()
+	if err != nil {
+		log.Fatal("Failed to load subscribers:", err)
+	}
 
 	// Initialize sources
 	okxSource := NewOKXSource()
@@ -229,12 +248,28 @@ func main() {
 		// Handle different commands
 		switch {
 		case update.Message.Text == "/start":
+			err := db.AddSubscriber(update.Message.Chat.ID)
+			if err != nil {
+				log.Printf("Error adding subscriber: %v", err)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID,
+					"Sorry, there was an error processing your request. Please try again later.")
+				sendTelegramMessage(bot, msg)
+				continue
+			}
 			activeChatIDs[update.Message.Chat.ID] = true
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID,
 				"Welcome! You will now receive notifications when lending rates exceed thresholds.")
 			sendTelegramMessage(bot, msg)
 
 		case update.Message.Text == "/stop":
+			err := db.RemoveSubscriber(update.Message.Chat.ID)
+			if err != nil {
+				log.Printf("Error removing subscriber: %v", err)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID,
+					"Sorry, there was an error processing your request. Please try again later.")
+				sendTelegramMessage(bot, msg)
+				continue
+			}
 			delete(activeChatIDs, update.Message.Chat.ID)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID,
 				"You have been unsubscribed from notifications.")
