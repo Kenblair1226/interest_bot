@@ -411,15 +411,15 @@ func formatRate(rate Rate, threshold float64) string {
 
 	// Format lending rate
 	if rate.LendingRate >= threshold*2 {
-		lendingRateStr = fmt.Sprintf("🔥`%.2f%%`", rate.LendingRate)
+		lendingRateStr = fmt.Sprintf("🔥%.0f%%", rate.LendingRate)
 	} else if rate.LendingRate >= threshold {
-		lendingRateStr = fmt.Sprintf("*`%.2f%%`*", rate.LendingRate)
+		lendingRateStr = fmt.Sprintf("*%.0f%%*", rate.LendingRate)
 	} else {
-		lendingRateStr = fmt.Sprintf("`%.2f%%`", rate.LendingRate)
+		lendingRateStr = fmt.Sprintf("%.0f%%", rate.LendingRate)
 	}
 
 	// Format borrow rate (optional: you might want to add threshold for borrow rates too)
-	borrowRateStr = fmt.Sprintf("`%.2f%%`", rate.BorrowRate)
+	borrowRateStr = fmt.Sprintf("%.0f%%", rate.BorrowRate)
 
 	return fmt.Sprintf("  • %s: L: %s | B: %s",
 		rate.Source, lendingRateStr, borrowRateStr)
