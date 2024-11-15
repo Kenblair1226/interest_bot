@@ -367,11 +367,9 @@ func main() {
 			sendTelegramMessage(bot, msg)
 
 		default:
-			// Send help message for unknown commands or random text
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID,
-				"I don't understand that command. Here's what I can do:\n\n"+getHelpMessage())
-			msg.ParseMode = "markdown"
-			sendTelegramMessage(bot, msg)
+			if update.Message.Text != "" {
+				log.Printf("Unknown command: %s", update.Message.Text)
+			}
 		}
 	}
 }
