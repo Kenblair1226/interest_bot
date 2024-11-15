@@ -46,7 +46,6 @@ lint:
     - golangci-lint run 
       --timeout=5m 
       --modules-download-mode=readonly 
-      --cache-dir=.cache 
       --fast 
       --config=.golangci.yml 
       ./src/...
