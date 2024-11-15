@@ -31,7 +31,7 @@ test:
     - main
     - merge_requests
 
-lint:
+.lint:
   stage: test
   image: golangci/golangci-lint:v1.56.2
   variables:
