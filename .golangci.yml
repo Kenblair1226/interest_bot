@@ -1,0 +1,14 @@
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - golint
+    - govet
+    - errcheck
+    - staticcheck
+    - gosimple
+
+run:
+  deadline: 5m
+  skip-dirs:
+    - vendor
