@@ -184,9 +184,12 @@ func main() {
 				})
 
 				threshold := lendingThresholds[token]
+				// Only show rates that are above 10%
 				for _, rate := range rates {
-					message.WriteString(formatRate(rate, threshold))
-					message.WriteString("\n")
+					if rate.LendingRate >= 10.0 {
+						message.WriteString(formatRate(rate, threshold))
+						message.WriteString("\n")
+					}
 				}
 				message.WriteString("\n")
 			}
@@ -208,8 +211,8 @@ func main() {
 	// Start a goroutine to handle rate checking and notifications
 	c := cron.New()
 
-	// Schedule rate fetching for 29th and 59th minute of every hour
-	_, err = c.AddFunc("29,59 * * * *", fetchRates)
+	// Schedule rate fetching for the 59th minute of every hour
+	_, err = c.AddFunc("59 * * * *", fetchRates)
 
 	if err != nil {
 		log.Fatal("Error setting up cron job:", err)
@@ -410,7 +413,7 @@ func formatRate(rate Rate, threshold float64) string {
 	if rate.LendingRate >= threshold*2 {
 		lendingRateStr = fmt.Sprintf("🔥`%.2f%%`", rate.LendingRate)
 	} else if rate.LendingRate >= threshold {
-		lendingRateStr = fmt.Sprintf("`*%.2f%%*`", rate.LendingRate)
+		lendingRateStr = fmt.Sprintf("*`%.2f%%`*", rate.LendingRate)
 	} else {
 		lendingRateStr = fmt.Sprintf("`%.2f%%`", rate.LendingRate)
 	}
