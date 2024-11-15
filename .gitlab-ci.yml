@@ -36,8 +36,20 @@ lint:
   image: golangci/golangci-lint:v1.56.2
   variables:
     GOPATH: $CI_PROJECT_DIR/.go
+  cache:
+    paths:
+      - .go
+      - .cache
+  before_script:
+    - mkdir -p .cache
   script:
-    - golangci-lint run --timeout=10m --modules-download-mode=readonly ./src/...
+    - golangci-lint run 
+      --timeout=5m 
+      --modules-download-mode=readonly 
+      --cache-dir=.cache 
+      --fast 
+      --config=.golangci.yml 
+      ./src/...
   only:
     - main
     - merge_requests
