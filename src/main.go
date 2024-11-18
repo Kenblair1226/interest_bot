@@ -8,16 +8,24 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
 )
 
+// RateSource defines the interface for rate providers
+type RateSource interface {
+	FetchRates() ([]Rate, error)
+}
+
 // Global storage for latest rates
 var (
 	latestRates       []Rate
 	ratesMutex        sync.RWMutex
+	lastFetchTime     time.Time
+	cacheDuration     = 5 * time.Minute
 	lendingThresholds = map[string]float64{
 		"USDC": 30.0,
 		"TIA":  30.0,
@@ -31,6 +39,7 @@ func updateLatestRates(rates []Rate) {
 	ratesMutex.Lock()
 	defer ratesMutex.Unlock()
 	latestRates = rates
+	lastFetchTime = time.Now()
 }
 
 // getLatestRates retrieves the latest rates thread-safely
@@ -38,6 +47,44 @@ func getLatestRates() []Rate {
 	ratesMutex.RLock()
 	defer ratesMutex.RUnlock()
 	return latestRates
+}
+
+// isCacheValid checks if the cache is valid
+func isCacheValid() bool {
+	ratesMutex.RLock()
+	defer ratesMutex.RUnlock()
+	return !lastFetchTime.IsZero() && time.Since(lastFetchTime) < cacheDuration
+}
+
+// fetchRates fetches rates from multiple sources
+func fetchRates(sources ...RateSource) ([]Rate, error) {
+	var allRates []Rate
+	var errors []error
+
+	for _, source := range sources {
+		rates, err := source.FetchRates()
+		if err != nil {
+			log.Printf("Error fetching rates from %T: %v", source, err)
+			errors = append(errors, err)
+			continue
+		}
+		allRates = append(allRates, rates...)
+	}
+
+	if len(allRates) == 0 && len(errors) > 0 {
+		return nil, fmt.Errorf("all sources failed to fetch rates")
+	}
+
+	updateLatestRates(allRates)
+	return allRates, nil
+}
+
+// getRatesWithCache fetches rates with caching
+func getRatesWithCache(sources ...RateSource) ([]Rate, error) {
+	if isCacheValid() {
+		return getLatestRates(), nil
+	}
+	return fetchRates(sources...)
 }
 
 var commandHelp = map[string]string{
@@ -116,35 +163,19 @@ func main() {
 	okxSource := NewOKXSource()
 	neptuneSource := NewNeptuneSource()
 	injeraSource := NewInjeraSource()
+	sources := []RateSource{okxSource, neptuneSource, injeraSource}
 
 	// Function to fetch and process rates
-	fetchRates := func() {
-		okxRates, err := okxSource.FetchRates()
+	cronFetchRates := func() {
+		rates, err := fetchRates(sources...)
 		if err != nil {
-			log.Printf("Error fetching OKX rates: %v", err)
+			log.Printf("Error fetching rates: %v", err)
+			return
 		}
-
-		neptuneRates, err := neptuneSource.FetchRates()
-		if err != nil {
-			log.Printf("Error fetching Neptune rates: %v", err)
-		}
-
-		injeraRates, err := injeraSource.FetchRates()
-		if err != nil {
-			log.Printf("Error fetching Injera rates: %v", err)
-		}
-
-		allRates := append(okxRates, neptuneRates...)
-		allRates = append(allRates, injeraRates...)
-
-		// Update global storage with latest rates
-		updateLatestRates(allRates)
-
-		log.Printf("Fetched rates: %+v", allRates)
 
 		// Filter rates based on lending rate thresholds
 		filteredRates := []Rate{}
-		for _, rate := range allRates {
+		for _, rate := range rates {
 			threshold, exists := lendingThresholds[rate.Token]
 			if !exists {
 				continue
@@ -165,7 +196,7 @@ func main() {
 			}
 
 			// Then, collect all rates for those tokens
-			for _, rate := range allRates {
+			for _, rate := range rates {
 				if tokensWithHighRates[rate.Token] {
 					ratesByToken[rate.Token] = append(ratesByToken[rate.Token], rate)
 				}
@@ -206,13 +237,13 @@ func main() {
 
 	// Perform initial fetch
 	log.Println("Performing initial rate fetch...")
-	fetchRates()
+	cronFetchRates()
 
 	// Start a goroutine to handle rate checking and notifications
 	c := cron.New()
 
 	// Schedule rate fetching for the 59th minute of every hour
-	_, err = c.AddFunc("59 * * * *", fetchRates)
+	_, err = c.AddFunc("59 * * * *", cronFetchRates)
 
 	if err != nil {
 		log.Fatal("Error setting up cron job:", err)
@@ -279,8 +310,14 @@ func main() {
 			sendTelegramMessage(bot, msg)
 
 		case strings.HasPrefix(update.Message.Text, "/rate"):
-			// Use the stored rates instead of fetching
-			allRates := getLatestRates()
+			// Use cached rates or fetch new ones
+			allRates, err := getRatesWithCache(sources...)
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID,
+					"Error fetching rates. Please try again later.")
+				sendTelegramMessage(bot, msg)
+				continue
+			}
 
 			if len(allRates) == 0 {
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID,
