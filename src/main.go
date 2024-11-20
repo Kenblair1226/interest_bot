@@ -27,9 +27,10 @@ var (
 	lastFetchTime     time.Time
 	cacheDuration     = 5 * time.Minute
 	lendingThresholds = map[string]float64{
-		"USDC": 30.0,
-		"TIA":  30.0,
-		"USDT": 30.0,
+		"USDC":  30.0,
+		"TIA":   30.0,
+		"USDT":  30.0,
+		"FDUSD": 30.0,
 	}
 	db *Database
 )
@@ -163,7 +164,8 @@ func main() {
 	okxSource := NewOKXSource()
 	neptuneSource := NewNeptuneSource()
 	injeraSource := NewInjeraSource()
-	sources := []RateSource{okxSource, neptuneSource, injeraSource}
+	binanceSource := NewBinanceSimpleEarnSource()
+	sources := []RateSource{okxSource, neptuneSource, injeraSource, binanceSource}
 
 	// Function to fetch and process rates
 	cronFetchRates := func() {

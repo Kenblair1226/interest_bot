@@ -6,3 +6,16 @@ type Rate struct {
 	BorrowRate  float64 `json:"borrow_rate"`
 	LendingRate float64 `json:"lending_rate"`
 }
+
+type Source interface {
+	FetchRates() ([]Rate, error)
+}
+
+func GetSources() []Source {
+	return []Source{
+		NewOKXSource(),
+		NewNeptuneSource(),
+		NewInjeraSource(),
+		NewBinanceSimpleEarnSource(),
+	}
+}
