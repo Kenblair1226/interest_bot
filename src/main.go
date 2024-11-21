@@ -245,7 +245,7 @@ func main() {
 	c := cron.New()
 
 	// Schedule rate fetching for the 59th minute of every hour
-	_, err = c.AddFunc("59 * * * *", cronFetchRates)
+	_, err = c.AddFunc("0 * * * *", cronFetchRates)
 
 	if err != nil {
 		log.Fatal("Error setting up cron job:", err)
