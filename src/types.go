@@ -5,6 +5,7 @@ type Rate struct {
 	Token       string  `json:"token"`
 	BorrowRate  float64 `json:"borrow_rate"`
 	LendingRate float64 `json:"lending_rate"`
+	Category    string  `json:"category"`
 }
 
 type Source interface {

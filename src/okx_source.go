@@ -10,6 +10,7 @@ import (
 type OKXSource struct {
 	APIURLTemplate string
 	CurrencyIDs    []int
+	Category       string
 }
 
 type OKXResponse struct {
@@ -27,6 +28,7 @@ func NewOKXSource() *OKXSource {
 	return &OKXSource{
 		APIURLTemplate: "https://www.okx.com/priapi/v2/financial/market-lending-info?currencyId=%d",
 		CurrencyIDs:    []int{2854, 7, 283}, // TIA, USDT, USDC
+		Category:       "CEX",
 	}
 }
 
@@ -43,6 +45,7 @@ func (s *OKXSource) FetchRates() ([]Rate, error) {
 			Token:       currencyName,
 			BorrowRate:  preRate * 100,       // Assuming preRate is the borrow rate
 			LendingRate: estimatedRate * 100, // Assuming estimatedRate is the lending rate
+			Category:    s.Category,
 		})
 	}
 	return rates, nil

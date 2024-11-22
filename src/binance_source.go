@@ -10,7 +10,8 @@ import (
 )
 
 type BinanceSimpleEarnSource struct {
-	client *http.Client
+	client   *http.Client
+	Category string
 }
 
 type BinanceSimpleEarnFullResponse struct {
@@ -30,6 +31,7 @@ func NewBinanceSimpleEarnSource() *BinanceSimpleEarnSource {
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		Category: "CEX",
 	}
 }
 
@@ -108,6 +110,7 @@ func (b *BinanceSimpleEarnSource) FetchRates() ([]Rate, error) {
 			Token:       product.Asset,
 			BorrowRate:  0,
 			LendingRate: maxApy * 100,
+			Category:    b.Category,
 		})
 	}
 

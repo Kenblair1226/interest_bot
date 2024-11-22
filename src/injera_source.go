@@ -11,7 +11,8 @@ import (
 )
 
 type InjeraSource struct {
-	APIURL string
+	APIURL   string
+	Category string
 }
 
 type InjeraResponse struct {
@@ -31,7 +32,8 @@ type InjeraRates struct {
 
 func NewInjeraSource() *InjeraSource {
 	return &InjeraSource{
-		APIURL: "https://inj24984.allnodes.me:1317/iAeAChGmajFpOeRk/cosmwasm/wasm/v1/contract/inj1578zx2zmp46l554zlw5jqq3nslth6ss04dv0ee/smart/ewogICJhZ2dyZWdhdGUiOiB7CiAgICAicXVlcmllcyI6IFsKICAgICAgewogICAgICAgICJhZGRyZXNzIjogImluajFkZmZ1ajR1ZDJmbjd2aGh3N2RlYzZhcng3dHV5eGQ1NnNyandrNCIsCiAgICAgICAgImRhdGEiOiAiZXlKdFlYSnJaWFFpT25zaVpHVnViMjBpT2lKd1pXZG5lVEI0WkVGRE1UZEdPVFU0UkRKbFpUVXlNMkV5TWpBMk1qQTJPVGswTlRrM1F6RXpSRGd6TVdWak55SjlmUT09IgogICAgICB9LAogICAgICB7CiAgICAgICAgImFkZHJlc3MiOiAiaW5qMXE1ZTZwbGVoMmg5ZDJxcjNtN2RybXhqN2tsZ3VnZzdweHZ1a3d0IiwKICAgICAgICAiZGF0YSI6ICJleUpoWTNScGRtVmZaVzFwYzNOcGIyNXpJanA3SW1OdmJHeGhkR1Z5WVd4ZlpHVnViMjBpT2lKd1pXZG5lVEI0WkVGRE1UZEdPVFU0UkRKbFpUVXlNMkV5TWpBMk1qQTJPVGswTlRrM1F6RXpSRGd6TVdWak55SjlmUT09IgogICAgICB9CiAgICBdCiAgfQp9",
+		APIURL:   "https://inj24984.allnodes.me:1317/iAeAChGmajFpOeRk/cosmwasm/wasm/v1/contract/inj1578zx2zmp46l554zlw5jqq3nslth6ss04dv0ee/smart/ewogICJhZ2dyZWdhdGUiOiB7CiAgICAicXVlcmllcyI6IFsKICAgICAgewogICAgICAgICJhZGRyZXNzIjogImluajFkZmZ1ajR1ZDJmbjd2aGh3N2RlYzZhcng3dHV5eGQ1NnNyandrNCIsCiAgICAgICAgImRhdGEiOiAiZXlKdFlYSnJaWFFpT25zaVpHVnViMjBpT2lKd1pXZG5lVEI0WkVGRE1UZEdPVFU0UkRKbFpUVXlNMkV5TWpBMk1qQTJPVGswTlRrM1F6RXpSRGd6TVdWak55SjlmUT09IgogICAgICB9LAogICAgICB7CiAgICAgICAgImFkZHJlc3MiOiAiaW5qMXE1ZTZwbGVoMmg5ZDJxcjNtN2RybXhqN2tsZ3VnZzdweHZ1a3d0IiwKICAgICAgICAiZGF0YSI6ICJleUpoWTNScGRtVmZaVzFwYzNOcGIyNXpJanA3SW1OdmJHeGhkR1Z5WVd4ZlpHVnViMjBpT2lKd1pXZG5lVEI0WkVGRE1UZEdPVFU0UkRKbFpUVXlNMkV5TWpBMk1qQTJPVGswTlRrM1F6RXpSRGd6TVdWak55SjlmUT09IgogICAgICB9CiAgICBdCiAgfQp9",
+		Category: "DEX",
 	}
 }
 
@@ -88,6 +90,7 @@ func (s *InjeraSource) FetchRates() ([]Rate, error) {
 				Token:       "USDT",
 				BorrowRate:  borrowRate * 100,
 				LendingRate: liquidityRate * 100,
+				Category:    s.Category,
 			}
 			rates = append(rates, rate)
 		}

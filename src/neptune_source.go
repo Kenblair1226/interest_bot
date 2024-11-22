@@ -9,8 +9,9 @@ import (
 )
 
 type NeptuneSource struct {
-	APIURL string
-	Tokens map[string]string
+	APIURL   string
+	Tokens   map[string]string
+	Category string
 }
 
 type NeptuneResponse struct {
@@ -26,6 +27,7 @@ func NewNeptuneSource() *NeptuneSource {
 			"ibc/F51BB221BAA275F2EBF654F70B005627D7E713AFFD6D86AFD1E43CAA886149F4": "TIA",
 			"peggy0xdAC17F958D2ee523a2206206994597C13D831ec7":                      "USDT",
 		},
+		Category: "DEX",
 	}
 }
 
@@ -85,8 +87,9 @@ func (s *NeptuneSource) FetchRates() ([]Rate, error) {
 			rateStruct, exists := ratesByToken[tokenName]
 			if !exists {
 				rateStruct = &Rate{
-					Source: "Neptune",
-					Token:  tokenName,
+					Source:   "Neptune",
+					Token:    tokenName,
+					Category: s.Category,
 				}
 				ratesByToken[tokenName] = rateStruct
 			}

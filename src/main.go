@@ -32,7 +32,8 @@ var (
 		"USDT":  30.0,
 		"FDUSD": 30.0,
 	}
-	db *Database
+	db              *Database
+	userPreferences = make(map[int64]bool) // Store user preferences for CEX rates
 )
 
 // updateLatestRates updates the global rates storage thread-safely
@@ -93,6 +94,7 @@ var commandHelp = map[string]string{
 	"/stop":  "Unsubscribe from rate notifications",
 	"/rate":  "Show current rates for all tokens\nUsage: /rate [token]\nExample: /rate USDT",
 	"/help":  "Show this help message",
+	"/cex":   "Toggle visibility of CEX (Centralized Exchange) rates",
 }
 
 func getHelpMessage() string {
@@ -111,6 +113,21 @@ func getHelpMessage() string {
 	}
 
 	return message.String()
+}
+
+func shouldShowCEXRates(chatID int64) bool {
+	preference, exists := userPreferences[chatID]
+	if !exists {
+		// Try to load from database
+		dbPreference, err := db.GetShowCEX(chatID)
+		if err != nil {
+			log.Printf("Error loading CEX preference: %v", err)
+			return true // Default to showing CEX rates
+		}
+		userPreferences[chatID] = dbPreference
+		return dbPreference
+	}
+	return preference
 }
 
 func main() {
@@ -165,6 +182,8 @@ func main() {
 	neptuneSource := NewNeptuneSource()
 	injeraSource := NewInjeraSource()
 	binanceSource := NewBinanceSimpleEarnSource()
+
+	// Sources are already initialized with their categories in their respective New functions
 	sources := []RateSource{okxSource, neptuneSource, injeraSource, binanceSource}
 
 	// Function to fetch and process rates
@@ -228,11 +247,37 @@ func main() {
 			}
 
 			// Send notification to all active chat IDs
-			msg := tgbotapi.NewMessage(0, message.String())
-			msg.ParseMode = "markdown"
 			for chatID := range activeChatIDs {
-				msg.ChatID = chatID
-				sendTelegramMessage(bot, msg)
+				// Filter rates based on user preferences
+				filteredMessage := message.String()
+				if !shouldShowCEXRates(chatID) {
+					// Create a new message with only DEX rates
+					var dexMessage strings.Builder
+					for token := range tokensWithHighRates {
+						rates := ratesByToken[token]
+						dexRates := []Rate{}
+						for _, rate := range rates {
+							if rate.Category == "DEX" {
+								dexRates = append(dexRates, rate)
+							}
+						}
+						if len(dexRates) > 0 {
+							dexMessage.WriteString(fmt.Sprintf("🪙 *%s*\n", token))
+							for _, rate := range dexRates {
+								dexMessage.WriteString(formatRate(rate, lendingThresholds[token]))
+								dexMessage.WriteString("\n")
+							}
+							dexMessage.WriteString("\n")
+						}
+					}
+					filteredMessage = dexMessage.String()
+				}
+
+				if filteredMessage != "" {
+					msg := tgbotapi.NewMessage(chatID, filteredMessage)
+					msg.ParseMode = "markdown"
+					sendTelegramMessage(bot, msg)
+				}
 			}
 		}
 	}
@@ -341,6 +386,9 @@ func main() {
 				tokenRates := []Rate{}
 				for _, rate := range allRates {
 					if rate.Token == token {
+						if rate.Category == "CEX" && !shouldShowCEXRates(update.Message.Chat.ID) {
+							continue
+						}
 						tokenRates = append(tokenRates, rate)
 						found = true
 					}
@@ -406,6 +454,25 @@ func main() {
 		case update.Message.Text == "/help":
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, getHelpMessage())
 			msg.ParseMode = "markdown"
+			sendTelegramMessage(bot, msg)
+
+		case update.Message.Text == "/cex":
+			newValue := !shouldShowCEXRates(update.Message.Chat.ID)
+			err := db.SetShowCEX(update.Message.Chat.ID, newValue)
+			if err != nil {
+				log.Printf("Error saving CEX preference: %v", err)
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID,
+					"Sorry, there was an error saving your preference. Please try again later.")
+				sendTelegramMessage(bot, msg)
+				continue
+			}
+			userPreferences[update.Message.Chat.ID] = newValue
+			status := "enabled"
+			if !newValue {
+				status = "disabled"
+			}
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID,
+				fmt.Sprintf("CEX rates are now %s.", status))
 			sendTelegramMessage(bot, msg)
 
 		default:
