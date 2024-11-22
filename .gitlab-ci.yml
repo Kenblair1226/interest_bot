@@ -8,9 +8,9 @@ variables:
 
 build:
   stage: build
-  image: docker:20.10.16
+  image: docker:latest
   services:
-    - docker:20.10.16-dind
+    - docker:dind
   variables:
     DOCKER_BUILDKIT: "1"  # Enable BuildKit for faster builds
   before_script:

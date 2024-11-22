@@ -205,7 +205,7 @@ func main() {
 			}
 
 			var message strings.Builder
-			message.WriteString("*High Lending Rate Updates*\n\n")
+			// message.WriteString("*High Lending Rate Updates*\n\n")
 
 			for token := range tokensWithHighRates {
 				rates := ratesByToken[token]
