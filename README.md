@@ -1,6 +1,18 @@
 # Interest Rate Bot
 
-This Telegram bot monitors interest rates from OKX and Neptune platforms and sends notifications when rates change.
+This Telegram bot monitors interest rates from CEX like OKX and DEX like Neptune and sends notifications when rates change.
+
+Currently supported:
+- Binance
+- OKX
+- Injera
+- Neptune
+
+Tokens supported:
+- USDT
+- USDC
+- FSUSD
+- Tia
 
 ## Prerequisites
 
