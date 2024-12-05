@@ -73,6 +73,17 @@ func fetchRates(sources ...RateSource) ([]Rate, error) {
 			errors = append(errors, err)
 			continue
 		}
+
+		// Convert APR to APY for Neptune and Injera rates
+		for i := range rates {
+			switch rates[i].Source {
+			case "Neptune", "Injera":
+				// Assuming daily compounding (365 times per year)
+				rates[i].LendingRate = convertAPRtoAPY(rates[i].LendingRate, 365)
+				rates[i].BorrowRate = convertAPRtoAPY(rates[i].BorrowRate, 365)
+			}
+		}
+
 		allRates = append(allRates, rates...)
 	}
 
@@ -313,7 +324,7 @@ func main() {
 	c := cron.New()
 
 	// Schedule rate fetching for the 59th minute of every hour
-	_, err = c.AddFunc("*/2 * * * *", cronFetchRates)
+	_, err = c.AddFunc("0 * * * *", cronFetchRates)
 
 	if err != nil {
 		log.Fatal("Error setting up cron job:", err)
@@ -403,7 +414,7 @@ func main() {
 			if len(parts) > 1 {
 				// Query specific token
 				token := strings.ToUpper(parts[1])
-				message.WriteString(fmt.Sprintf("*Current Rates for %s*\n\n", token))
+				message.WriteString(fmt.Sprintf("*Current Rates for %s*\n", token))
 
 				found := false
 				tokenRates := []Rate{}
@@ -437,7 +448,7 @@ func main() {
 
 			} else {
 				// Show all rates
-				message.WriteString("*Current Rates for All Tokens*\n\n")
+				message.WriteString("*Current Rates for All Tokens*\n")
 
 				// Group rates by token
 				ratesByToken := make(map[string][]Rate)
@@ -552,4 +563,17 @@ func formatRate(rate Rate, threshold float64) string {
 
 	return fmt.Sprintf("  • %s: L: %s | B: %s",
 		rate.Source, lendingRateStr, borrowRateStr)
+}
+
+// convertAPRtoAPY converts APR to APY
+// compounds is the number of times interest is compounded per year
+func convertAPRtoAPY(apr float64, compounds int) float64 {
+	// Convert percentage to decimal
+	aprDecimal := apr / 100
+
+	// Calculate APY
+	apy := math.Pow(1+aprDecimal/float64(compounds), float64(compounds)) - 1
+
+	// Convert back to percentage
+	return apy * 100
 }
