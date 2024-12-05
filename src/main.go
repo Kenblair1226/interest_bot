@@ -235,14 +235,14 @@ func main() {
 					return rates[i].Source < rates[j].Source
 				})
 
-				threshold := lendingThresholds[token]
-				// Only show rates that are above 10%
-				for _, rate := range rates {
-					if rate.LendingRate >= 10.0 {
-						message.WriteString(formatRate(rate, threshold))
-						message.WriteString("\n")
-					}
-				}
+				// threshold := lendingThresholds[token]
+				// // Only show rates that are above 10%
+				// for _, rate := range rates {
+				// 	if rate.LendingRate >= 10.0 {
+				// 		message.WriteString(formatRate(rate, threshold))
+				// 		message.WriteString("\n")
+				// 	}
+				// }
 				message.WriteString("\n")
 			}
 
