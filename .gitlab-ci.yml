@@ -1,13 +1,13 @@
 stages:
-  # - test
-  # - build
+  - test
+  - build
   - deploy
 
 variables:
   DOCKER_IMAGE: $CI_REGISTRY/$CI_REGISTRY_USER/$CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG
   CGO_ENABLED: "1"  # Enable CGo for all stages
 
-.build:
+build:
   stage: build
   image: docker:latest
   services:
@@ -23,7 +23,7 @@ variables:
     - main
     - tags
 
-.test:
+test:
   stage: test
   image: golang:1.22
   variables:
