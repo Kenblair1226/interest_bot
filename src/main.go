@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,8 +33,10 @@ var (
 		"USDT":  30.0,
 		"FDUSD": 30.0,
 	}
-	db              *Database
-	userPreferences = make(map[int64]bool) // Store user preferences for CEX rates
+	db                  *Database
+	userPreferences     = make(map[int64]bool)             // Store user preferences for CEX rates
+	previousRates       = make(map[string]map[string]Rate) // token -> source -> rate
+	rateChangeThreshold = 10.0                             // 10% change threshold
 )
 
 // updateLatestRates updates the global rates storage thread-safely
@@ -130,6 +133,27 @@ func shouldShowCEXRates(chatID int64) bool {
 	return preference
 }
 
+func hasSignificantChange(oldRate, newRate Rate) bool {
+	if oldRate.LendingRate == 0 {
+		return true // First time seeing this rate
+	}
+
+	percentChange := ((newRate.LendingRate - oldRate.LendingRate) / oldRate.LendingRate) * 100
+	return math.Abs(percentChange) >= rateChangeThreshold
+}
+
+func updatePreviousRates(rates []Rate) {
+	ratesMutex.Lock()
+	defer ratesMutex.Unlock()
+
+	for _, rate := range rates {
+		if _, exists := previousRates[rate.Token]; !exists {
+			previousRates[rate.Token] = make(map[string]Rate)
+		}
+		previousRates[rate.Token][rate.Source] = rate
+	}
+}
+
 func main() {
 	// Try to load .env file
 	err := godotenv.Load()
@@ -194,17 +218,25 @@ func main() {
 			return
 		}
 
-		// Filter rates based on lending rate thresholds
+		// Filter rates based on lending rate thresholds and significant changes
 		filteredRates := []Rate{}
 		for _, rate := range rates {
 			threshold, exists := lendingThresholds[rate.Token]
 			if !exists {
 				continue
 			}
+
+			// Check if rate exceeds threshold and has significant change
 			if rate.LendingRate >= threshold {
-				filteredRates = append(filteredRates, rate)
+				prevRate, hasPrevious := previousRates[rate.Token][rate.Source]
+				if !hasPrevious || hasSignificantChange(prevRate, rate) {
+					filteredRates = append(filteredRates, rate)
+				}
 			}
 		}
+
+		// Update previous rates after filtering
+		updatePreviousRates(rates)
 
 		if len(filteredRates) > 0 {
 			// Group rates by token
@@ -223,58 +255,49 @@ func main() {
 				}
 			}
 
-			var message strings.Builder
-			// message.WriteString("*High Lending Rate Updates*\n\n")
-
-			for token := range tokensWithHighRates {
-				rates := ratesByToken[token]
-				message.WriteString(fmt.Sprintf("🪙 *%s*\n", token))
-
-				// Sort rates by source for consistent ordering
-				sort.Slice(rates, func(i, j int) bool {
-					return rates[i].Source < rates[j].Source
-				})
-
-				// threshold := lendingThresholds[token]
-				// // Only show rates that are above 10%
-				// for _, rate := range rates {
-				// 	if rate.LendingRate >= 10.0 {
-				// 		message.WriteString(formatRate(rate, threshold))
-				// 		message.WriteString("\n")
-				// 	}
-				// }
-				message.WriteString("\n")
-			}
-
 			// Send notification to all active chat IDs
 			for chatID := range activeChatIDs {
-				// Filter rates based on user preferences
-				filteredMessage := message.String()
-				if !shouldShowCEXRates(chatID) {
-					// Create a new message with only DEX rates
-					var dexMessage strings.Builder
-					for token := range tokensWithHighRates {
-						rates := ratesByToken[token]
-						dexRates := []Rate{}
-						for _, rate := range rates {
-							if rate.Category == "DEX" {
-								dexRates = append(dexRates, rate)
-							}
+				var message strings.Builder
+				hasSignificantRates := false
+
+				// Build message based on user preferences
+				for token := range tokensWithHighRates {
+					rates := ratesByToken[token]
+
+					// Filter rates based on user preferences
+					relevantRates := []Rate{}
+					for _, rate := range rates {
+						if !shouldShowCEXRates(chatID) && rate.Category == "CEX" {
+							continue
 						}
-						if len(dexRates) > 0 {
-							dexMessage.WriteString(fmt.Sprintf("🪙 *%s*\n", token))
-							for _, rate := range dexRates {
-								dexMessage.WriteString(formatRate(rate, lendingThresholds[token]))
-								dexMessage.WriteString("\n")
-							}
-							dexMessage.WriteString("\n")
+
+						// Check if this rate has significant change
+						prevRate, hasPrevious := previousRates[token][rate.Source]
+						if !hasPrevious || hasSignificantChange(prevRate, rate) {
+							relevantRates = append(relevantRates, rate)
+							hasSignificantRates = true
 						}
 					}
-					filteredMessage = dexMessage.String()
+
+					if len(relevantRates) > 0 {
+						message.WriteString(fmt.Sprintf("🪙 *%s*\n", token))
+
+						// Sort rates by source for consistent ordering
+						sort.Slice(relevantRates, func(i, j int) bool {
+							return relevantRates[i].Source < relevantRates[j].Source
+						})
+
+						for _, rate := range relevantRates {
+							message.WriteString(formatRate(rate, lendingThresholds[token]))
+							message.WriteString("\n")
+						}
+						message.WriteString("\n")
+					}
 				}
 
-				if filteredMessage != "" {
-					msg := tgbotapi.NewMessage(chatID, filteredMessage)
+				// Only send message if there are significant rate changes
+				if hasSignificantRates {
+					msg := tgbotapi.NewMessage(chatID, message.String())
 					msg.ParseMode = "markdown"
 					sendTelegramMessage(bot, msg)
 				}
@@ -290,7 +313,7 @@ func main() {
 	c := cron.New()
 
 	// Schedule rate fetching for the 59th minute of every hour
-	_, err = c.AddFunc("0 * * * *", cronFetchRates)
+	_, err = c.AddFunc("*/2 * * * *", cronFetchRates)
 
 	if err != nil {
 		log.Fatal("Error setting up cron job:", err)
