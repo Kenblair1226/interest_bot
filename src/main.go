@@ -36,7 +36,7 @@ var (
 	db                  *Database
 	userPreferences     = make(map[int64]bool)             // Store user preferences for CEX rates
 	previousRates       = make(map[string]map[string]Rate) // token -> source -> rate
-	rateChangeThreshold = 10.0                             // 10% change threshold
+	rateChangeThreshold = 5.0                              // 5% change threshold
 )
 
 // updateLatestRates updates the global rates storage thread-safely
@@ -63,6 +63,7 @@ func isCacheValid() bool {
 
 // fetchRates fetches rates from multiple sources
 func fetchRates(sources ...RateSource) ([]Rate, error) {
+	log.Printf("Fetching rates from %d sources...", len(sources))
 	var allRates []Rate
 	var errors []error
 
@@ -84,6 +85,12 @@ func fetchRates(sources ...RateSource) ([]Rate, error) {
 			}
 		}
 
+		// Log rates from this source
+		for _, rate := range rates {
+			log.Printf("Fetched rate from %s: %s L: %.2f%% B: %.2f%%",
+				rate.Source, rate.Token, rate.LendingRate, rate.BorrowRate)
+		}
+
 		allRates = append(allRates, rates...)
 	}
 
@@ -91,6 +98,7 @@ func fetchRates(sources ...RateSource) ([]Rate, error) {
 		return nil, fmt.Errorf("all sources failed to fetch rates")
 	}
 
+	log.Printf("Successfully fetched %d rates total", len(allRates))
 	updateLatestRates(allRates)
 	return allRates, nil
 }
@@ -269,50 +277,39 @@ func main() {
 			// Send notification to all active chat IDs
 			for chatID := range activeChatIDs {
 				var message strings.Builder
-				hasSignificantRates := false
 
 				// Build message based on user preferences
 				for token := range tokensWithHighRates {
 					rates := ratesByToken[token]
 
 					// Filter rates based on user preferences
-					relevantRates := []Rate{}
 					for _, rate := range rates {
 						if !shouldShowCEXRates(chatID) && rate.Category == "CEX" {
 							continue
 						}
-
-						// Check if this rate has significant change
-						prevRate, hasPrevious := previousRates[token][rate.Source]
-						if !hasPrevious || hasSignificantChange(prevRate, rate) {
-							relevantRates = append(relevantRates, rate)
-							hasSignificantRates = true
-						}
 					}
 
-					if len(relevantRates) > 0 {
-						message.WriteString(fmt.Sprintf("🪙 *%s*\n", token))
+					message.WriteString(fmt.Sprintf("🪙 *%s*\n", token))
 
-						// Sort rates by source for consistent ordering
-						sort.Slice(relevantRates, func(i, j int) bool {
-							return relevantRates[i].Source < relevantRates[j].Source
-						})
+					// Sort rates by source for consistent ordering
+					sort.Slice(rates, func(i, j int) bool {
+						return rates[i].Source < rates[j].Source
+					})
 
-						for _, rate := range relevantRates {
-							message.WriteString(formatRate(rate, lendingThresholds[token]))
-							message.WriteString("\n")
-						}
+					for _, rate := range rates {
+						message.WriteString(formatRate(rate, lendingThresholds[token]))
 						message.WriteString("\n")
 					}
+					message.WriteString("\n")
 				}
 
-				// Only send message if there are significant rate changes
-				if hasSignificantRates {
-					msg := tgbotapi.NewMessage(chatID, message.String())
-					msg.ParseMode = "markdown"
-					sendTelegramMessage(bot, msg)
-				}
+				msg := tgbotapi.NewMessage(chatID, message.String())
+				msg.ParseMode = "markdown"
+				sendTelegramMessage(bot, msg)
 			}
+		} else {
+			// Log rates that were checked but didn't meet the significance threshold
+			log.Println("No rates met the significance threshold")
 		}
 	}
 
@@ -324,7 +321,7 @@ func main() {
 	c := cron.New()
 
 	// Schedule rate fetching for the 59th minute of every hour
-	_, err = c.AddFunc("0 * * * *", cronFetchRates)
+	_, err = c.AddFunc("*/2 * * * *", cronFetchRates)
 
 	if err != nil {
 		log.Fatal("Error setting up cron job:", err)
