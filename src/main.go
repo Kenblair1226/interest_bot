@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,8 +33,10 @@ var (
 		"USDT":  30.0,
 		"FDUSD": 30.0,
 	}
-	db              *Database
-	userPreferences = make(map[int64]bool) // Store user preferences for CEX rates
+	db                  *Database
+	userPreferences     = make(map[int64]bool)             // Store user preferences for CEX rates
+	previousRates       = make(map[string]map[string]Rate) // token -> source -> rate
+	rateChangeThreshold = 5.0                              // 5% change threshold
 )
 
 // updateLatestRates updates the global rates storage thread-safely
@@ -60,6 +63,7 @@ func isCacheValid() bool {
 
 // fetchRates fetches rates from multiple sources
 func fetchRates(sources ...RateSource) ([]Rate, error) {
+	log.Printf("Fetching rates from %d sources...", len(sources))
 	var allRates []Rate
 	var errors []error
 
@@ -70,6 +74,23 @@ func fetchRates(sources ...RateSource) ([]Rate, error) {
 			errors = append(errors, err)
 			continue
 		}
+
+		// Convert APR to APY for Neptune and Injera rates
+		for i := range rates {
+			switch rates[i].Source {
+			case "Neptune", "Injera":
+				// Assuming daily compounding (365 times per year)
+				rates[i].LendingRate = convertAPRtoAPY(rates[i].LendingRate, 365)
+				rates[i].BorrowRate = convertAPRtoAPY(rates[i].BorrowRate, 365)
+			}
+		}
+
+		// Log rates from this source
+		for _, rate := range rates {
+			log.Printf("Fetched rate from %s: %s L: %.2f%% B: %.2f%%",
+				rate.Source, rate.Token, rate.LendingRate, rate.BorrowRate)
+		}
+
 		allRates = append(allRates, rates...)
 	}
 
@@ -77,6 +98,7 @@ func fetchRates(sources ...RateSource) ([]Rate, error) {
 		return nil, fmt.Errorf("all sources failed to fetch rates")
 	}
 
+	log.Printf("Successfully fetched %d rates total", len(allRates))
 	updateLatestRates(allRates)
 	return allRates, nil
 }
@@ -128,6 +150,27 @@ func shouldShowCEXRates(chatID int64) bool {
 		return dbPreference
 	}
 	return preference
+}
+
+func hasSignificantChange(oldRate, newRate Rate) bool {
+	if oldRate.LendingRate == 0 {
+		return true // First time seeing this rate
+	}
+
+	percentChange := ((newRate.LendingRate - oldRate.LendingRate) / oldRate.LendingRate) * 100
+	return math.Abs(percentChange) >= rateChangeThreshold
+}
+
+func updatePreviousRates(rates []Rate) {
+	ratesMutex.Lock()
+	defer ratesMutex.Unlock()
+
+	for _, rate := range rates {
+		if _, exists := previousRates[rate.Token]; !exists {
+			previousRates[rate.Token] = make(map[string]Rate)
+		}
+		previousRates[rate.Token][rate.Source] = rate
+	}
 }
 
 func main() {
@@ -195,17 +238,25 @@ func main() {
 			return
 		}
 
-		// Filter rates based on lending rate thresholds
+		// Filter rates based on lending rate thresholds and significant changes
 		filteredRates := []Rate{}
 		for _, rate := range rates {
 			threshold, exists := lendingThresholds[rate.Token]
 			if !exists {
 				continue
 			}
+
+			// Check if rate exceeds threshold and has significant change
 			if rate.LendingRate >= threshold {
-				filteredRates = append(filteredRates, rate)
+				prevRate, hasPrevious := previousRates[rate.Token][rate.Source]
+				if !hasPrevious || hasSignificantChange(prevRate, rate) {
+					filteredRates = append(filteredRates, rate)
+				}
 			}
 		}
+
+		// Update previous rates after filtering
+		updatePreviousRates(rates)
 
 		if len(filteredRates) > 0 {
 			// Group rates by token
@@ -224,62 +275,42 @@ func main() {
 				}
 			}
 
-			var message strings.Builder
-			// message.WriteString("*High Lending Rate Updates*\n\n")
-
-			for token := range tokensWithHighRates {
-				rates := ratesByToken[token]
-				message.WriteString(fmt.Sprintf("🪙 *%s*\n", token))
-
-				// Sort rates by source for consistent ordering
-				sort.Slice(rates, func(i, j int) bool {
-					return rates[i].Source < rates[j].Source
-				})
-
-				threshold := lendingThresholds[token]
-				// Only show rates that are above 10%
-				for _, rate := range rates {
-					if rate.LendingRate >= 10.0 {
-						message.WriteString(formatRate(rate, threshold))
-						message.WriteString("\n")
-					}
-				}
-				message.WriteString("\n")
-			}
-
 			// Send notification to all active chat IDs
 			for chatID := range activeChatIDs {
-				// Filter rates based on user preferences
-				filteredMessage := message.String()
-				if !shouldShowCEXRates(chatID) {
-					// Create a new message with only DEX rates
-					var dexMessage strings.Builder
-					for token := range tokensWithHighRates {
-						rates := ratesByToken[token]
-						dexRates := []Rate{}
-						for _, rate := range rates {
-							if rate.Category == "DEX" {
-								dexRates = append(dexRates, rate)
-							}
-						}
-						if len(dexRates) > 0 {
-							dexMessage.WriteString(fmt.Sprintf("🪙 *%s*\n", token))
-							for _, rate := range dexRates {
-								dexMessage.WriteString(formatRate(rate, lendingThresholds[token]))
-								dexMessage.WriteString("\n")
-							}
-							dexMessage.WriteString("\n")
+				var message strings.Builder
+
+				// Build message based on user preferences
+				for token := range tokensWithHighRates {
+					rates := ratesByToken[token]
+
+					// Filter rates based on user preferences
+					for _, rate := range rates {
+						if !shouldShowCEXRates(chatID) && rate.Category == "CEX" {
+							continue
 						}
 					}
-					filteredMessage = dexMessage.String()
+
+					message.WriteString(fmt.Sprintf("🪙 *%s*\n", token))
+
+					// Sort rates by source for consistent ordering
+					sort.Slice(rates, func(i, j int) bool {
+						return rates[i].Source < rates[j].Source
+					})
+
+					for _, rate := range rates {
+						message.WriteString(formatRate(rate, lendingThresholds[token]))
+						message.WriteString("\n")
+					}
+					message.WriteString("\n")
 				}
 
-				if filteredMessage != "" {
-					msg := tgbotapi.NewMessage(chatID, filteredMessage)
-					msg.ParseMode = "markdown"
-					sendTelegramMessage(bot, msg)
-				}
+				msg := tgbotapi.NewMessage(chatID, message.String())
+				msg.ParseMode = "markdown"
+				sendTelegramMessage(bot, msg)
 			}
+		} else {
+			// Log rates that were checked but didn't meet the significance threshold
+			log.Println("No rates met the significance threshold")
 		}
 	}
 
@@ -291,7 +322,7 @@ func main() {
 	c := cron.New()
 
 	// Schedule rate fetching for the 59th minute of every hour
-	_, err = c.AddFunc("0 * * * *", cronFetchRates)
+	_, err = c.AddFunc("*/2 * * * *", cronFetchRates)
 
 	if err != nil {
 		log.Fatal("Error setting up cron job:", err)
@@ -381,7 +412,7 @@ func main() {
 			if len(parts) > 1 {
 				// Query specific token
 				token := strings.ToUpper(parts[1])
-				message.WriteString(fmt.Sprintf("*Current Rates for %s*\n\n", token))
+				message.WriteString(fmt.Sprintf("*Current Rates for %s*\n", token))
 
 				found := false
 				tokenRates := []Rate{}
@@ -415,7 +446,7 @@ func main() {
 
 			} else {
 				// Show all rates
-				message.WriteString("*Current Rates for All Tokens*\n\n")
+				message.WriteString("*Current Rates for All Tokens*\n")
 
 				// Group rates by token
 				ratesByToken := make(map[string][]Rate)
@@ -530,4 +561,17 @@ func formatRate(rate Rate, threshold float64) string {
 
 	return fmt.Sprintf("  • %s: L: %s | B: %s",
 		rate.Source, lendingRateStr, borrowRateStr)
+}
+
+// convertAPRtoAPY converts APR to APY
+// compounds is the number of times interest is compounded per year
+func convertAPRtoAPY(apr float64, compounds int) float64 {
+	// Convert percentage to decimal
+	aprDecimal := apr / 100
+
+	// Calculate APY
+	apy := math.Pow(1+aprDecimal/float64(compounds), float64(compounds)) - 1
+
+	// Convert back to percentage
+	return apy * 100
 }
