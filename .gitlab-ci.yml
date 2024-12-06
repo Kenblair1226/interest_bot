@@ -9,7 +9,7 @@ variables:
 
 test:
   stage: test
-  image: golang:1.22
+  image: golang:1.23
   variables:
     CACHE_DISABLED: "true"
   script:
@@ -20,11 +20,10 @@ build:
   stage: build
   image: docker:latest
   services:
-    - docker:dind
-  variables:
-    DOCKER_BUILDKIT: "1"  # Enable BuildKit for faster builds
+    - name: docker:dind
   before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - echo $DOCKER_IMAGE
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
   script:
     - docker build --build-arg CGO_ENABLED=1 -t $DOCKER_IMAGE .
     - docker push $DOCKER_IMAGE
