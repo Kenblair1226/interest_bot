@@ -545,22 +545,25 @@ func getEnv(key, defaultValue string) string {
 }
 
 func formatRate(rate Rate, threshold float64) string {
-	var lendingRateStr, borrowRateStr string
+	var lendingRateStr, borrowRateStr, emoji string
 
-	// Format lending rate
+	// Format lending rate with right alignment
 	if rate.LendingRate >= threshold*2 {
-		lendingRateStr = fmt.Sprintf("🔥%.0f%%", rate.LendingRate)
+		lendingRateStr = fmt.Sprintf("%4.0f%%", rate.LendingRate)
+		emoji = " 🔥"
 	} else if rate.LendingRate >= threshold {
-		lendingRateStr = fmt.Sprintf("*%.0f%%*", rate.LendingRate)
+		lendingRateStr = fmt.Sprintf("%4.0f%%", rate.LendingRate)
+		emoji = " 🚀"
 	} else {
-		lendingRateStr = fmt.Sprintf("%.0f%%", rate.LendingRate)
+		lendingRateStr = fmt.Sprintf("%5.0f%%", rate.LendingRate)
 	}
 
-	// Format borrow rate (optional: you might want to add threshold for borrow rates too)
-	borrowRateStr = fmt.Sprintf("%.0f%%", rate.BorrowRate)
+	// Format borrow rate with right alignment
+	borrowRateStr = fmt.Sprintf("%5.0f%%", rate.BorrowRate)
 
-	return fmt.Sprintf("  • %s: L: %s | B: %s",
-		rate.Source, lendingRateStr, borrowRateStr)
+	// Using monospace formatting for Telegram with minimal spacing
+	return fmt.Sprintf("`%-8s%7s│%6s`%s",
+		rate.Source, lendingRateStr, borrowRateStr, emoji)
 }
 
 // convertAPRtoAPY converts APR to APY
