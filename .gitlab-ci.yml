@@ -7,6 +7,15 @@ variables:
   DOCKER_IMAGE: $CI_REGISTRY/$CI_REGISTRY_USER/$CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG
   CGO_ENABLED: "1"  # Enable CGo for all stages
 
+test:
+  stage: test
+  image: golang:1.22
+  variables:
+    CACHE_DISABLED: "true"
+  script:
+    - go test ./src/...
+  cache: {}  # Explicitly disable cache
+
 build:
   stage: build
   image: docker:latest
@@ -22,18 +31,6 @@ build:
   only:
     - main
     - tags
-
-test:
-  stage: test
-  image: golang:1.22
-  variables:
-    CACHE_DISABLED: "true"
-  script:
-    - go test ./src/...
-  only:
-    - main
-    - merge_requests
-  cache: {}  # Explicitly disable cache
 
 .lint:
   stage: test
