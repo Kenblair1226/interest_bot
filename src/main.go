@@ -225,9 +225,10 @@ func main() {
 	neptuneSource := NewNeptuneSource()
 	injeraSource := NewInjeraSource()
 	binanceSource := NewBinanceSimpleEarnSource()
+	bybitSource := NewBybitSource()
 
 	// Sources are already initialized with their categories in their respective New functions
-	sources := []RateSource{okxSource, neptuneSource, injeraSource, binanceSource}
+	sources := []RateSource{okxSource, neptuneSource, injeraSource, binanceSource, bybitSource}
 
 	// Function to fetch and process rates
 	cronFetchRates := func() {
