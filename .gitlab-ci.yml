@@ -4,7 +4,6 @@ stages:
   - deploy
 
 variables:
-  DOCKER_IMAGE: $CI_REGISTRY/$CI_REGISTRY_USER/$CI_PROJECT_NAME:$CI_COMMIT_REF_SLUG
   CGO_ENABLED: "1"  # Enable CGo for all stages
 
 test:
@@ -22,6 +21,8 @@ build:
   services:
     - name: docker:dind
   before_script:
+    - SEMVER_TAG=$(echo $CI_COMMIT_REF_NAME | cut -d/ -f2)
+    - DOCKER_IMAGE=$CI_REGISTRY/$CI_REGISTRY_USER/$CI_PROJECT_NAME:$SEMVER_TAG
     - echo $DOCKER_IMAGE
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
   script:
@@ -70,6 +71,8 @@ deploy:
     - chmod 700 ~/.ssh
     - echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
+    - SEMVER_TAG=$(echo $CI_COMMIT_REF_NAME | cut -d/ -f2)
+    - DOCKER_IMAGE=$CI_REGISTRY/$CI_REGISTRY_USER/$CI_PROJECT_NAME:$SEMVER_TAG
   script:
     - scp -O docker-compose.yml $SSH_USER@$NAS_HOST:~/interest_bot/
     - |
