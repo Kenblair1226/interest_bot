@@ -81,4 +81,4 @@ deploy:
         export TELEGRAM_TOKEN=$TELEGRAM_TOKEN && \
         /usr/local/bin/docker-compose up -d --force-recreate"
   only:
-    - main
+    - tags
